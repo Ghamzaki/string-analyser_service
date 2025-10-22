@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, status, Query
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 from typing import Dict, Any, List, Optional
 
@@ -11,13 +11,14 @@ string_db: Dict[str, Dict[str, Any]] = {}
 # Helper function to analyze string
 def analyze_string(value: str) -> Dict[str, Any]:
     value_lower = value.lower()
+    chars_no_space = [ch for ch in value if not ch.isspace()]
     return {
         "length": len(value),
         "is_palindrome": value_lower == value_lower[::-1],
-        "unique_characters": len(set(value)),
+        "unique_characters": len(set(chars_no_space)),
         "word_count": len(value.split()),
         "sha256_hash": hashlib.sha256(value.encode()).hexdigest(),
-        "character_frequency_map": {ch: value.count(ch) for ch in set(value)}
+        "character_frequency_map": {ch: chars_no_space.count(ch) for ch in set(chars_no_space)}
     }
 
 @app.post("/strings", status_code=status.HTTP_201_CREATED)
@@ -31,7 +32,7 @@ def create_string(payload: Dict[str, Any]):
     if sha256_hash in string_db:
         raise HTTPException(status_code=409, detail='String already exists')
     properties = analyze_string(value)
-    created_at = datetime.utcnow().isoformat() + "Z"
+    created_at = datetime.now(timezone.utc).isoformat()
     string_db[sha256_hash] = {
         "id": sha256_hash,
         "value": value,
@@ -97,7 +98,7 @@ def delete_string(string_value: str):
 
 @app.get("/strings/filter-by-natural-language")
 def filter_by_natural_language(query: str):
-    # Simple parser for demo purposes
+    # Simple parser
     parsed_filters = {}
     q = query.lower()
     if "single word" in q:
@@ -115,7 +116,7 @@ def filter_by_natural_language(query: str):
             parsed_filters["contains_character"] = match.group(1)
     if not parsed_filters:
         raise HTTPException(status_code=400, detail="Unable to parse natural language query")
-    # Use the same filtering logic as above
+    # Use the same filtering logic as /strings endpoint
     results = []
     for entry in string_db.values():
         props = entry["properties"]
